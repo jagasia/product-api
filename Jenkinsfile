@@ -75,4 +75,12 @@ pipeline {
             echo 'Pipeline failed. Existing application was not replaced.'
         }
     }
+stage('Archive Artifact') {
+    steps {
+        echo 'Archiving JAR artifact...'
+
+        archiveArtifacts artifacts: 'target/*.jar',
+                         fingerprint: true
+    }
+}
 }
