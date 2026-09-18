@@ -80,7 +80,7 @@ pipeline {
             echo 'Deployment successful.'
 
             emailext(
-                to: 'jag@upskillit.com',
+                to: 'upskillit.jag@gmail.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
 Jenkins CI/CD Pipeline Successful
@@ -111,7 +111,7 @@ The CI/CD pipeline completed successfully.
             echo 'Pipeline failed. Existing application was not replaced.'
 
             emailext(
-                to: 'jag@upskillit.com',
+                to: 'upskillit.jag@gmail.com',
                 subject: "FAILED:- ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
 Jenkins CI/CD Pipeline Failed
