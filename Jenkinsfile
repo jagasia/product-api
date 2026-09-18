@@ -3,18 +3,18 @@ pipeline {
     agent any
 
     options {
-        // If a new build starts, abort the previous running build
         disableConcurrentBuilds(abortPrevious: true)
 
-        // Keep only the latest 10 Jenkins builds
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        buildDiscarder(
+            logRotator(numToKeepStr: '10')
+        )
     }
 
     stages {
 
         stage('Build') {
             steps {
-                echo 'Building Spring Boot application...'
+                echo 'Building application...'
                 bat 'mvn clean package -DskipTests'
             }
         }
@@ -28,23 +28,23 @@ pipeline {
 
         stage('Stop Existing Application') {
             steps {
-                echo 'Stopping existing application on port 8081...'
+                echo 'Stopping existing Spring Boot application on port 8081...'
 
                 bat '''
                     for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8081 ^| findstr LISTENING') do (
-                        echo Stopping process %%a
+                        echo Stopping PID %%a
                         taskkill /PID %%a /F
                     )
                 '''
             }
         }
 
-        stage('Start Application') {
+        stage('Start New Application') {
             steps {
-                echo 'Starting Spring Boot application on port 8081...'
+                echo 'Starting new Spring Boot application on port 8081...'
 
                 bat '''
-                    start "SpringBootApp" cmd /c "java -jar target\\*.jar --server.port=8081 > application.log 2>&1"
+                    start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8081 > application.log 2>&1"
                 '''
             }
         }
@@ -53,15 +53,11 @@ pipeline {
     post {
 
         success {
-            echo 'Application deployed successfully on port 8081.'
+            echo 'Deployment successful.'
         }
 
         failure {
-            echo 'Pipeline failed.'
-        }
-
-        always {
-            echo 'Pipeline execution completed.'
+            echo 'Pipeline failed. Existing application was not replaced.'
         }
     }
 }
