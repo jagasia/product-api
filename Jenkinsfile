@@ -112,7 +112,7 @@ The CI/CD pipeline completed successfully.
 
             emailext(
                 to: 'jag@upskillit.com',
-                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                subject: "FAILED:- ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
 Jenkins CI/CD Pipeline Failed
 
