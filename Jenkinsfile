@@ -62,4 +62,3 @@ stage('Start New Application') {
         '''
     }
 }
-}
