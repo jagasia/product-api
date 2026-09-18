@@ -63,25 +63,76 @@ pipeline {
                 '''
             }
         }
-        stage('Archive Artifact') {
-    steps {
-        echo 'Archiving JAR artifact...'
 
-        archiveArtifacts artifacts: 'target/*.jar',
-                         fingerprint: true
-    }
-}
+        stage('Archive Artifact') {
+            steps {
+                echo 'Archiving JAR artifact...'
+
+                archiveArtifacts artifacts: 'target/*.jar',
+                                 fingerprint: true
+            }
+        }
     }
 
     post {
 
         success {
             echo 'Deployment successful.'
+
+            emailext(
+                to: 'jag@upskillit.com',
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+Jenkins CI/CD Pipeline Successful
+
+Job Name      : ${env.JOB_NAME}
+Build Number  : #${env.BUILD_NUMBER}
+Build Status  : SUCCESS
+
+Application
+-----------
+Spring Boot application deployed successfully.
+Port: 8082
+
+Artifact
+--------
+The JAR artifact has been archived by Jenkins.
+
+Build URL
+---------
+${env.BUILD_URL}
+
+The CI/CD pipeline completed successfully.
+"""
+            )
         }
 
         failure {
             echo 'Pipeline failed. Existing application was not replaced.'
+
+            emailext(
+                to: 'jag@upskillit.com',
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+Jenkins CI/CD Pipeline Failed
+
+Job Name      : ${env.JOB_NAME}
+Build Number  : #${env.BUILD_NUMBER}
+Build Status  : FAILURE
+
+The Jenkins pipeline failed during one of its stages.
+
+Please check the Jenkins console output for details.
+
+Build URL
+---------
+${env.BUILD_URL}
+
+Pipeline
+--------
+${env.JOB_NAME} #${env.BUILD_NUMBER}
+"""
+            )
         }
     }
-
 }
