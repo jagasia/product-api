@@ -28,10 +28,10 @@ pipeline {
 
         stage('Stop Existing Application') {
             steps {
-                echo 'Stopping existing Spring Boot application on port 8081...'
+                echo 'Stopping existing Spring Boot application on port 8082...'
 
                 bat '''
-                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
+                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8082" ^| findstr "LISTENING"') do (
                         echo Stopping PID %%a
                         taskkill /PID %%a /F >nul 2>&1
                     )
@@ -42,24 +42,24 @@ pipeline {
 
         stage('Start New Application') {
             steps {
-                echo 'Starting new Spring Boot application on port 8081...'
+                echo 'Starting new Spring Boot application on port 8082...'
 
                 bat '''
-                    start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8081 > application.log 2>&1"
+                    start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8082 > application.log 2>&1"
 
                     timeout /t 10 /nobreak >nul
 
-                    netstat -ano | findstr ":8081" | findstr "LISTENING"
+                    netstat -ano | findstr ":8082" | findstr "LISTENING"
 
                     if %ERRORLEVEL% NEQ 0 (
-                        echo ERROR: Spring Boot application did not start on port 8081.
+                        echo ERROR: Spring Boot application did not start on port 8082.
                         echo.
                         echo ===== application.log =====
                         type application.log
                         exit /b 1
                     )
 
-                    echo Spring Boot application is running on port 8081.
+                    echo Spring Boot application is running on port 8082.
                 '''
             }
         }
