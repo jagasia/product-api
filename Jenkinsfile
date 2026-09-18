@@ -26,39 +26,53 @@ pipeline {
             }
         }
 
-stage('Stop Existing Application') {
-    steps {
-        echo 'Stopping existing Spring Boot application on port 8081...'
+        stage('Stop Existing Application') {
+            steps {
+                echo 'Stopping existing Spring Boot application on port 8081...'
 
-        bat '''
-            for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
-                echo Stopping PID %%a
-                taskkill /PID %%a /F >nul 2>&1
-            )
-            exit /b 0
-        '''
+                bat '''
+                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
+                        echo Stopping PID %%a
+                        taskkill /PID %%a /F >nul 2>&1
+                    )
+                    exit /b 0
+                '''
+            }
+        }
+
+        stage('Start New Application') {
+            steps {
+                echo 'Starting new Spring Boot application on port 8081...'
+
+                bat '''
+                    start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8081 > application.log 2>&1"
+
+                    timeout /t 10 /nobreak >nul
+
+                    netstat -ano | findstr ":8081" | findstr "LISTENING"
+
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo ERROR: Spring Boot application did not start on port 8081.
+                        echo.
+                        echo ===== application.log =====
+                        type application.log
+                        exit /b 1
+                    )
+
+                    echo Spring Boot application is running on port 8081.
+                '''
+            }
+        }
     }
-}
-stage('Start New Application') {
-    steps {
-        echo 'Starting new Spring Boot application on port 8081...'
 
-        bat '''
-            start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8081 > application.log 2>&1"
+    post {
 
-            timeout /t 10 /nobreak >nul
+        success {
+            echo 'Deployment successful.'
+        }
 
-            netstat -ano | findstr ":8081" | findstr "LISTENING"
-
-            if %ERRORLEVEL% NEQ 0 (
-                echo ERROR: Spring Boot application did not start on port 8081.
-                echo.
-                echo ===== application.log =====
-                type application.log
-                exit /b 1
-            )
-
-            echo Spring Boot application is running on port 8081.
-        '''
+        failure {
+            echo 'Pipeline failed. Existing application was not replaced.'
+        }
     }
 }
