@@ -26,18 +26,19 @@ pipeline {
             }
         }
 
-        stage('Stop Existing Application') {
-            steps {
-                echo 'Stopping existing Spring Boot application on port 8081...'
+stage('Stop Existing Application') {
+    steps {
+        echo 'Stopping existing Spring Boot application on port 8081...'
 
-                bat '''
-                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8081 ^| findstr LISTENING') do (
-                        echo Stopping PID %%a
-                        taskkill /PID %%a /F
-                    )
-                '''
-            }
-        }
+        bat '''
+            for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
+                echo Stopping PID %%a
+                taskkill /PID %%a /F >nul 2>&1
+            )
+            exit /b 0
+        '''
+    }
+}
 
         stage('Start New Application') {
             steps {
