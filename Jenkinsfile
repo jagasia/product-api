@@ -61,7 +61,7 @@ stage('Start New Application') {
 
             sleep 10
 
-            if lsof -i:8083 >/dev/null 2>&1; then
+            if curl -s http://localhost:8083/ >/dev/null 2>&1; then
                 echo "Spring Boot application is running on port 8083."
             else
                 echo "ERROR: Spring Boot application did not start on port 8083."
