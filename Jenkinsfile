@@ -28,51 +28,90 @@ pipeline {
             }
         }
 
-        stage('Stop Existing Application') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Stopping existing Spring Boot application on port 8083...'
+                echo 'Building Docker image...'
 
                 sh '''
-                    PID=$(lsof -t -i:8083 || true)
-
-                    if [ -n "$PID" ]; then
-                        echo "Stopping PID $PID"
-                        kill -9 $PID || true
-                    else
-                        echo "No application currently running on port 8083."
-                    fi
-
-                    exit 0
+                    docker build -t product-api:latest .
                 '''
             }
         }
 
-stage('Start New Application') {
-    steps {
-        echo 'Starting new Spring Boot application on port 8083...'
-        sh '''
-            nohup java -jar target/product-api-0.0.1-SNAPSHOT.jar \
-              --server.port=8083 \
-              > application.log 2>&1 &
+        stage('Stop Existing Container') {
+            steps {
+                echo 'Stopping existing Product API container...'
 
-            echo $! > application.pid
-            echo "Spring Boot PID: $(cat application.pid)"
-            echo "Waiting for application to start..."
+                sh '''
+                    if docker ps -a --format '{{.Names}}' | grep -q '^product-api$'; then
+                        echo "Stopping existing product-api container..."
+                        docker stop product-api || true
 
-            sleep 10
+                        echo "Removing existing product-api container..."
+                        docker rm product-api || true
+                    else
+                        echo "No existing product-api container found."
+                    fi
+                '''
+            }
+        }
 
-            if curl -s http://localhost:8083/ >/dev/null 2>&1; then
-                echo "Spring Boot application is running on port 8083."
-            else
-                echo "ERROR: Spring Boot application did not start on port 8083."
-                echo
-                echo "===== application.log ====="
-                cat application.log
-                exit 1
-            fi
-        '''
-    }
-}
+        stage('Deploy New Container') {
+            steps {
+                echo 'Starting new Product API container on port 8083...'
+
+                sh '''
+                    docker run -d \
+                        --name product-api \
+                        -p 8083:8083 \
+                        product-api:latest
+                '''
+
+                echo 'Waiting for Spring Boot application to start...'
+
+                sh '''
+                    for i in 1 2 3 4 5 6 7 8 9 10; do
+
+                        if curl -s http://localhost:8083/hello >/dev/null 2>&1; then
+                            echo "Spring Boot application is running on port 8083."
+                            exit 0
+                        fi
+
+                        echo "Application not ready yet... waiting 2 seconds."
+                        sleep 2
+                    done
+
+                    echo "ERROR: Spring Boot application did not start."
+                    echo
+                    echo "===== Docker Container Status ====="
+                    docker ps -a --filter name=product-api
+
+                    echo
+                    echo "===== Application Logs ====="
+                    docker logs product-api
+
+                    exit 1
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                echo 'Verifying Product API...'
+
+                sh '''
+                    echo "Testing /hello endpoint..."
+                    curl -f http://localhost:8083/hello
+
+                    echo
+                    echo "Testing /products endpoint..."
+                    curl -f http://localhost:8083/products
+
+                    echo
+                    echo "Product API deployment verified successfully."
+                '''
+            }
+        }
 
         stage('Archive Artifact') {
             steps {
@@ -109,21 +148,43 @@ Build Status : SUCCESS
 
 Application
 -----------
-Spring Boot application was successfully deployed.
+
+Spring Boot Product API was successfully
+built, tested, Dockerized and deployed.
 
 Application Port:
 8083
+
+Endpoints:
+http://<EC2-PUBLIC-IP>:8083/hello
+http://<EC2-PUBLIC-IP>:8083/products
+
+========================================
+
+Docker
+------
+
+Container:
+product-api
+
+Image:
+product-api:latest
+
+Port:
+8083:8083
 
 ========================================
 
 Artifact
 --------
+
 The JAR artifact has been archived successfully.
 
 ========================================
 
 Build Information
 -----------------
+
 Build URL:
 ${env.BUILD_URL}
 
@@ -167,6 +228,7 @@ Please check the Jenkins console output for details.
 
 Build Information
 -----------------
+
 Build URL:
 ${env.BUILD_URL}
 
