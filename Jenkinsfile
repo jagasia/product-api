@@ -10,6 +10,19 @@ pipeline {
         )
     }
 
+    environment {
+        APP_NAME = 'product-api'
+        APP_PORT = '8083'
+        JAR_NAME = 'product-api-0.0.1-SNAPSHOT.jar'
+
+        // EC2 server details
+        EC2_USER = 'ec2-user'
+        EC2_HOST = 'YOUR_EC2_PUBLIC_IP'
+
+        // Location where the application will be deployed on EC2
+        DEPLOY_DIR = '/home/ec2-user/product-api'
+    }
+
     stages {
 
         stage('Build') {
@@ -28,87 +41,84 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Prepare Deployment') {
             steps {
-                echo 'Building Docker image...'
+                echo 'Preparing deployment directory on EC2...'
 
                 sh '''
-                    docker build -t product-api:latest .
+                    ssh -o StrictHostKeyChecking=no \
+                        ${EC2_USER}@${EC2_HOST} \
+                        "mkdir -p ${DEPLOY_DIR}"
                 '''
             }
         }
 
-        stage('Stop Existing Container') {
+        stage('Copy JAR to EC2') {
             steps {
-                echo 'Stopping existing Product API container...'
+                echo 'Copying JAR to EC2 server...'
 
                 sh '''
-                    if docker ps -a --format '{{.Names}}' | grep -q '^product-api$'; then
-                        echo "Stopping existing product-api container..."
-                        docker stop product-api || true
-
-                        echo "Removing existing product-api container..."
-                        docker rm product-api || true
-                    else
-                        echo "No existing product-api container found."
-                    fi
+                    scp -o StrictHostKeyChecking=no \
+                        target/${JAR_NAME} \
+                        ${EC2_USER}@${EC2_HOST}:${DEPLOY_DIR}/
                 '''
             }
         }
 
-        stage('Deploy New Container') {
+        stage('Stop Existing Application') {
             steps {
-                echo 'Starting new Product API container on port 8083...'
+                echo 'Stopping existing Spring Boot application on EC2...'
 
                 sh '''
-                    docker run -d \
-                        --name product-api \
-                        -p 8083:8083 \
-                        product-api:latest
+                    ssh -o StrictHostKeyChecking=no \
+                        ${EC2_USER}@${EC2_HOST} \
+                        "PID=\\$(lsof -t -i:${APP_PORT} || true); \
+                        if [ -n \\"\\$PID\\" ]; then \
+                            echo 'Stopping existing application PID:' \\$PID; \
+                            kill \\$PID || true; \
+                        else \
+                            echo 'No application currently running on port ${APP_PORT}.'; \
+                        fi"
                 '''
+            }
+        }
 
-                echo 'Waiting for Spring Boot application to start...'
+        stage('Start New Application') {
+            steps {
+                echo 'Starting Spring Boot application on EC2...'
 
                 sh '''
-                    for i in 1 2 3 4 5 6 7 8 9 10; do
-
-                        if curl -s http://localhost:8083/hello >/dev/null 2>&1; then
-                            echo "Spring Boot application is running on port 8083."
-                            exit 0
-                        fi
-
-                        echo "Application not ready yet... waiting 2 seconds."
-                        sleep 2
-                    done
-
-                    echo "ERROR: Spring Boot application did not start."
-                    echo
-                    echo "===== Docker Container Status ====="
-                    docker ps -a --filter name=product-api
-
-                    echo
-                    echo "===== Application Logs ====="
-                    docker logs product-api
-
-                    exit 1
+                    ssh -o StrictHostKeyChecking=no \
+                        ${EC2_USER}@${EC2_HOST} \
+                        "cd ${DEPLOY_DIR} && \
+                        nohup java -jar ${JAR_NAME} \
+                        --server.port=${APP_PORT} \
+                        > application.log 2>&1 & \
+                        echo \\$! > application.pid"
                 '''
+
+                echo 'Waiting for application to start...'
+
+                sleep 10
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                echo 'Verifying Product API...'
+                echo 'Verifying application on EC2...'
 
                 sh '''
-                    echo "Testing /hello endpoint..."
-                    curl -f http://localhost:8083/hello
+                    echo "Testing /hello..."
+
+                    curl -f http://${EC2_HOST}:${APP_PORT}/hello
 
                     echo
-                    echo "Testing /products endpoint..."
-                    curl -f http://localhost:8083/products
+                    echo "Testing /products..."
+
+                    curl -f http://${EC2_HOST}:${APP_PORT}/products
 
                     echo
-                    echo "Product API deployment verified successfully."
+                    echo "Application deployment verified successfully."
                 '''
             }
         }
@@ -149,29 +159,24 @@ Build Status : SUCCESS
 Application
 -----------
 
-Spring Boot Product API was successfully
-built, tested, Dockerized and deployed.
+Spring Boot application was successfully
+built, tested and deployed to EC2.
 
 Application Port:
 8083
 
 Endpoints:
-http://<EC2-PUBLIC-IP>:8083/hello
-http://<EC2-PUBLIC-IP>:8083/products
+
+http://${EC2_HOST}:8083/hello
+
+http://${EC2_HOST}:8083/products
 
 ========================================
 
-Docker
-------
+Deployment Directory
+--------------------
 
-Container:
-product-api
-
-Image:
-product-api:latest
-
-Port:
-8083:8083
+${DEPLOY_DIR}
 
 ========================================
 
@@ -236,7 +241,7 @@ Jenkins Job:
 ${env.JOB_NAME}
 
 Build Number:
-#${env.BUILD_NUMBER}
+${env.BUILD_NUMBER}
 
 ========================================
 
