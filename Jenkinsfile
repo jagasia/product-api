@@ -16,7 +16,7 @@ pipeline {
             steps {
                 echo 'Building application...'
 
-                bat 'mvn clean package -DskipTests'
+                sh 'mvn clean package -DskipTests'
             }
         }
 
@@ -24,7 +24,7 @@ pipeline {
             steps {
                 echo 'Running tests...'
 
-                bat 'mvn test'
+                sh 'mvn test'
             }
         }
 
@@ -32,13 +32,17 @@ pipeline {
             steps {
                 echo 'Stopping existing Spring Boot application on port 8083...'
 
-                bat '''
-                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8083" ^| findstr "LISTENING"') do (
-                        echo Stopping PID %%a
-                        taskkill /PID %%a /F >nul 2>&1
-                    )
+                sh '''
+                    PID=$(lsof -t -i:8083 || true)
 
-                    exit /b 0
+                    if [ -n "$PID" ]; then
+                        echo "Stopping PID $PID"
+                        kill -9 $PID || true
+                    else
+                        echo "No application currently running on port 8083."
+                    fi
+
+                    exit 0
                 '''
             }
         }
@@ -47,22 +51,27 @@ pipeline {
             steps {
                 echo 'Starting new Spring Boot application on port 8083...'
 
-                bat '''
-                    start "SpringBootApp" cmd /c "java -jar target\\product-api-0.0.1-SNAPSHOT.jar --server.port=8083 > application.log 2>&1"
+                sh '''
+                    nohup java -jar target/product-api-0.0.1-SNAPSHOT.jar \
+                        --server.port=8083 \
+                        > application.log 2>&1 &
 
-                    timeout /t 10 /nobreak >nul
+                    echo $! > application.pid
 
-                    netstat -ano | findstr ":8083" | findstr "LISTENING"
+                    echo "Spring Boot PID: $(cat application.pid)"
 
-                    if %ERRORLEVEL% NEQ 0 (
-                        echo ERROR: Spring Boot application did not start on port 8083.
-                        echo.
-                        echo ===== application.log =====
-                        type application.log
-                        exit /b 1
-                    )
+                    echo "Waiting for application to start..."
+                    sleep 10
 
-                    echo Spring Boot application is running on port 8083.
+                    if lsof -i:8083 >/dev/null 2>&1; then
+                        echo "Spring Boot application is running on port 8083."
+                    else
+                        echo "ERROR: Spring Boot application did not start on port 8083."
+                        echo
+                        echo "===== application.log ====="
+                        cat application.log
+                        exit 1
+                    fi
                 '''
             }
         }
@@ -129,7 +138,6 @@ ${env.BUILD_NUMBER}
 ========================================
 
 The CI/CD pipeline completed successfully.
-
 """
             )
         }
@@ -168,12 +176,11 @@ Jenkins Job:
 ${env.JOB_NAME}
 
 Build Number:
-${env.BUILD_NUMBER}
+#${env.BUILD_NUMBER}
 
 ========================================
 
 Please investigate the failed stage and Jenkins console log.
-
 """
             )
         }
